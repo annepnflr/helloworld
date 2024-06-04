@@ -1,0 +1,135 @@
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show rootBundle;
+import 'package:yaml/yaml.dart';
+
+void main() {
+  runApp(MyApp());
+}
+
+class MyApp extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      home: Scaffold(
+        appBar: AppBar(title: Text('Personal Information Form')),
+        body: PersonalInfoForm(),
+      ),
+    );
+  }
+}
+
+class PersonalInfoForm extends StatefulWidget {
+  @override
+  _PersonalInfoFormState createState() => _PersonalInfoFormState();
+}
+
+class _PersonalInfoFormState extends State<PersonalInfoForm> {
+  final _formKey = GlobalKey<FormState>();
+  final Map<String, TextEditingController> _controllers = {};
+  DateTime _selectedDate;
+  
+  List<dynamic> formFields = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadYaml();
+  }
+
+  Future<void> _loadYaml() async {
+    final yamlString = await rootBundle.loadString('assets/form_fields.yaml');
+    final yaml = loadYaml(yamlString);
+
+    setState(() {
+      formFields = yaml['fields'];
+    });
+  }
+
+  _selectDate(BuildContext context, String label) async {
+    final DateTime picked = await showDatePicker(
+      context: context,
+      initialDate: DateTime.now(),
+      firstDate: DateTime(1900),
+      lastDate: DateTime(2101),
+    );
+    if (picked != null) {
+      setState(() {
+        _selectedDate = picked;
+        _controllers[label].text = "${_selectedDate.toLocal()}".split(' ')[0];
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.all(16.0),
+      child: Form(
+        key: _formKey,
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: formFields.map<Widget>((field) {
+              final label = field['label'];
+              final type = field['type'];
+
+              _controllers[label] = TextEditingController();
+
+              if (type == 'text') {
+                return TextFormField(
+                  controller: _controllers[label],
+                  decoration: InputDecoration(labelText: label),
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Please enter $label';
+                    }
+                    return null;
+                  },
+                );
+              } else if (type == 'date') {
+                return Row(
+                  children: [
+                    Expanded(
+                      child: TextFormField(
+                        controller: _controllers[label],
+                        decoration: InputDecoration(labelText: label),
+                        readOnly: true,
+                        onTap: () => _selectDate(context, label),
+                      ),
+                    ),
+                    IconButton(
+                      icon: Icon(Icons.calendar_today),
+                      onPressed: () => _selectDate(context, label),
+                    ),
+                  ],
+                );
+              }
+              return Container();
+            }).toList()
+            ..add(SizedBox(height: 20))
+            ..add(
+              ElevatedButton(
+                onPressed: () {
+                  if (_formKey.currentState.validate()) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Processing Data')),
+                    );
+                  }
+                },
+                child: Text('Submit'),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controllers.forEach((key, controller) {
+      controller.dispose();
+    });
+    super.dispose();
+  }
+}
